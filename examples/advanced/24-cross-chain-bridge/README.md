@@ -15,9 +15,14 @@ This example demonstrates a cross-chain bridge architecture on Soroban with lock
 
 ```rust
 let admin = Address::generate(&env);
-let validators = Vec::from_array(&env, [validator1, validator2, validator3]);
+let validators = Vec::from_array(&env, [validator1_public_key, validator2_public_key, validator3_public_key]);
 client.initialize(&admin, &validators, &2u32);
 ```
+
+Validators are Ed25519 public keys (`BytesN<32>`). Each signature must be a
+64-byte Ed25519 signature over the SHA-256 hash of the transfer's XDR encoding.
+Keep validator private keys outside the contract; addresses and unverified
+signature bytes are not proof of approval.
 
 ### Lock Tokens
 
