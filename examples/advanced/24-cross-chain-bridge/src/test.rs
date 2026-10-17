@@ -2,9 +2,10 @@
 extern crate std;
 
 use super::*;
+use ed25519_dalek::{Signer, SigningKey};
 use soroban_sdk::{
     testutils::{Address as _, Events},
-    Address, Bytes, Env, Vec,
+    Address, Bytes, BytesN, Env, Vec,
 };
 
 // Mock token contract for testing
@@ -69,13 +70,92 @@ fn get_token_balance(env: &Env, token_id: &Address, address: &Address) -> i128 {
     token_client.balance(address)
 }
 
+fn validator(env: &Env, seed: u8) -> BytesN<32> {
+    let signing_key = SigningKey::from_bytes(&[seed; 32]);
+    BytesN::from_array(env, &signing_key.verifying_key().to_bytes())
+}
+
+fn validator_keypair(env: &Env, seed: u8) -> (SigningKey, BytesN<32>) {
+    let signing_key = SigningKey::from_bytes(&[seed; 32]);
+    let public_key = BytesN::from_array(env, &signing_key.verifying_key().to_bytes());
+    (signing_key, public_key)
+}
+
+fn sign_transfer(env: &Env, transfer: &BridgeTransfer, signing_key: &SigningKey) -> BytesN<64> {
+    let transfer_hash = env
+        .crypto()
+        .sha256(&transfer.clone().to_xdr(env))
+        .to_bytes();
+    BytesN::from_array(env, &signing_key.sign(&transfer_hash.to_array()).to_bytes())
+}
+
+#[test]
+#[should_panic]
+fn test_mint_rejects_invalid_signature() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let validator = validator(&env, 1);
+    let validators = Vec::from_array(&env, [validator.clone()]);
+    let bridge_id = env.register_contract(None, CrossChainBridgeContract);
+    let bridge_client = CrossChainBridgeContractClient::new(&env, &bridge_id);
+    bridge_client.initialize(&Address::generate(&env), &validators, &1u32);
+    let transfer = BridgeTransfer {
+        source_chain: symbol_short!("ethereum"),
+        destination_chain: symbol_short!("soroban"),
+        sender: Address::generate(&env),
+        recipient: Address::generate(&env).to_string().to_bytes(),
+        token: Address::generate(&env),
+        amount: 1,
+        nonce: 0,
+    };
+    let signatures = Vec::from_array(
+        &env,
+        [ValidatorSignature {
+            validator,
+            signature: BytesN::from_array(&env, &[0u8; 64]),
+        }],
+    );
+
+    bridge_client.mint_tokens(&transfer, &signatures);
+}
+
+#[test]
+#[should_panic]
+fn test_release_rejects_invalid_signature() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let validator = validator(&env, 1);
+    let validators = Vec::from_array(&env, [validator.clone()]);
+    let bridge_id = env.register_contract(None, CrossChainBridgeContract);
+    let bridge_client = CrossChainBridgeContractClient::new(&env, &bridge_id);
+    bridge_client.initialize(&Address::generate(&env), &validators, &1u32);
+    let transfer = BridgeTransfer {
+        source_chain: symbol_short!("ethereum"),
+        destination_chain: symbol_short!("soroban"),
+        sender: Address::generate(&env),
+        recipient: Address::generate(&env).to_string().to_bytes(),
+        token: Address::generate(&env),
+        amount: 1,
+        nonce: 0,
+    };
+    let signatures = Vec::from_array(
+        &env,
+        [ValidatorSignature {
+            validator,
+            signature: BytesN::from_array(&env, &[0u8; 64]),
+        }],
+    );
+
+    bridge_client.release_tokens(&transfer, &signatures);
+}
+
 #[test]
 fn test_initialize() {
     let env = Env::default();
     env.mock_all_auths();
     let admin = Address::generate(&env);
-    let validator1 = Address::generate(&env);
-    let validator2 = Address::generate(&env);
+    let validator1 = validator(&env, 1);
+    let validator2 = validator(&env, 2);
     let validators = Vec::from_array(&env, [validator1.clone(), validator2.clone()]);
 
     let contract_id = env.register_contract(None, CrossChainBridgeContract);
@@ -87,6 +167,7 @@ fn test_initialize() {
     assert_eq!(client.get_threshold(), 2);
     assert!(client.is_validator(&validator1));
     assert!(client.is_validator(&validator2));
+    assert_eq!(client.count_validators(), 2);
 }
 
 #[test]
@@ -95,7 +176,7 @@ fn test_initialize_twice_panics() {
     let env = Env::default();
     env.mock_all_auths();
     let admin = Address::generate(&env);
-    let validators = Vec::from_array(&env, [Address::generate(&env)]);
+    let validators = Vec::from_array(&env, [validator(&env, 1)]);
 
     let contract_id = env.register_contract(None, CrossChainBridgeContract);
     let client = CrossChainBridgeContractClient::new(&env, &contract_id);
@@ -117,7 +198,7 @@ fn test_lock_tokens() {
 
     // Setup bridge
     let bridge_admin = Address::generate(&env);
-    let validators = Vec::from_array(&env, [Address::generate(&env)]);
+    let validators = Vec::from_array(&env, [validator(&env, 1)]);
     let bridge_id = env.register_contract(None, CrossChainBridgeContract);
     let bridge_client = CrossChainBridgeContractClient::new(&env, &bridge_id);
     bridge_client.initialize(&bridge_admin, &validators, &1u32);
@@ -164,7 +245,7 @@ fn test_lock_zero_amount_panics() {
 
     let token_id = env.register_contract(None, MockTokenContract);
     let bridge_admin = Address::generate(&env);
-    let validators = Vec::from_array(&env, [Address::generate(&env)]);
+    let validators = Vec::from_array(&env, [validator(&env, 1)]);
     let bridge_id = env.register_contract(None, CrossChainBridgeContract);
     let bridge_client = CrossChainBridgeContractClient::new(&env, &bridge_id);
     bridge_client.initialize(&bridge_admin, &validators, &1u32);
@@ -186,16 +267,20 @@ fn test_add_validator() {
     env.mock_all_auths();
 
     let admin = Address::generate(&env);
-    let initial_validator = Address::generate(&env);
+    let initial_validator = validator(&env, 1);
     let validators = Vec::from_array(&env, [initial_validator.clone()]);
     let contract_id = env.register_contract(None, CrossChainBridgeContract);
     let client = CrossChainBridgeContractClient::new(&env, &contract_id);
     client.initialize(&admin, &validators, &1u32);
 
-    let new_validator = Address::generate(&env);
+    let new_validator = validator(&env, 2);
     client.add_validator(&admin, &new_validator);
 
     assert!(client.is_validator(&new_validator));
+    assert_eq!(client.count_validators(), 2);
+    client.remove_validator(&admin, &new_validator);
+    assert!(!client.is_validator(&new_validator));
+    assert_eq!(client.count_validators(), 1);
 }
 
 #[test]
@@ -205,7 +290,7 @@ fn test_add_duplicate_validator_panics() {
     env.mock_all_auths();
 
     let admin = Address::generate(&env);
-    let validator = Address::generate(&env);
+    let validator = validator(&env, 1);
     let validators = Vec::from_array(&env, [validator.clone()]);
     let contract_id = env.register_contract(None, CrossChainBridgeContract);
     let client = CrossChainBridgeContractClient::new(&env, &contract_id);
@@ -223,9 +308,9 @@ fn test_set_threshold() {
     let validators = Vec::from_array(
         &env,
         [
-            Address::generate(&env),
-            Address::generate(&env),
-            Address::generate(&env),
+            validator(&env, 1),
+            validator(&env, 2),
+            validator(&env, 3),
         ],
     );
     let contract_id = env.register_contract(None, CrossChainBridgeContract);
@@ -243,7 +328,7 @@ fn test_set_threshold_zero_panics() {
     env.mock_all_auths();
 
     let admin = Address::generate(&env);
-    let validators = Vec::from_array(&env, [Address::generate(&env)]);
+    let validators = Vec::from_array(&env, [validator(&env, 1)]);
     let contract_id = env.register_contract(None, CrossChainBridgeContract);
     let client = CrossChainBridgeContractClient::new(&env, &contract_id);
     client.initialize(&admin, &validators, &1u32);
@@ -257,7 +342,7 @@ fn test_map_token() {
     env.mock_all_auths();
 
     let admin = Address::generate(&env);
-    let validators = Vec::from_array(&env, [Address::generate(&env)]);
+    let validators = Vec::from_array(&env, [validator(&env, 1)]);
     let contract_id = env.register_contract(None, CrossChainBridgeContract);
     let client = CrossChainBridgeContractClient::new(&env, &contract_id);
     client.initialize(&admin, &validators, &1u32);
@@ -285,7 +370,7 @@ fn test_burn_tokens() {
 
     // Setup bridge
     let bridge_admin = Address::generate(&env);
-    let validators = Vec::from_array(&env, [Address::generate(&env)]);
+    let validators = Vec::from_array(&env, [validator(&env, 1)]);
     let bridge_id = env.register_contract(None, CrossChainBridgeContract);
     let bridge_client = CrossChainBridgeContractClient::new(&env, &bridge_id);
     bridge_client.initialize(&bridge_admin, &validators, &1u32);
@@ -320,7 +405,7 @@ fn test_burn_zero_amount_panics() {
 
     let token_id = env.register_contract(None, MockTokenContract);
     let bridge_admin = Address::generate(&env);
-    let validators = Vec::from_array(&env, [Address::generate(&env)]);
+    let validators = Vec::from_array(&env, [validator(&env, 1)]);
     let bridge_id = env.register_contract(None, CrossChainBridgeContract);
     let bridge_client = CrossChainBridgeContractClient::new(&env, &bridge_id);
     bridge_client.initialize(&bridge_admin, &validators, &1u32);
@@ -349,9 +434,9 @@ fn test_mint_tokens() {
 
     // Setup bridge
     let bridge_admin = Address::generate(&env);
-    let validator1 = Address::generate(&env);
-    let validator2 = Address::generate(&env);
-    let validators = Vec::from_array(&env, [validator1.clone(), validator2.clone()]);
+    let (signer1, validator1) = validator_keypair(&env, 1);
+    let validator2 = validator(&env, 2);
+    let validators = Vec::from_array(&env, [validator1.clone(), validator2]);
     let bridge_id = env.register_contract(None, CrossChainBridgeContract);
     let bridge_client = CrossChainBridgeContractClient::new(&env, &bridge_id);
     bridge_client.initialize(&bridge_admin, &validators, &1u32);
@@ -375,7 +460,7 @@ fn test_mint_tokens() {
     // Create signatures
     let signature = ValidatorSignature {
         validator: validator1,
-        signature: Bytes::from_array(&env, &[0u8; 64]),
+        signature: sign_transfer(&env, &transfer, &signer1),
     };
     let signatures = Vec::from_array(&env, [signature]);
 
@@ -400,8 +485,9 @@ fn test_mint_duplicate_transfer_panics() {
     token_client.initialize(&token_admin);
 
     let bridge_admin = Address::generate(&env);
-    let validator = Address::generate(&env);
-    let validators = Vec::from_array(&env, [validator.clone()]);
+    let (signer, validator) = validator_keypair(&env, 1);
+    let second_validator = validator(&env, 2);
+    let validators = Vec::from_array(&env, [validator.clone(), second_validator]);
     let bridge_id = env.register_contract(None, CrossChainBridgeContract);
     let bridge_client = CrossChainBridgeContractClient::new(&env, &bridge_id);
     bridge_client.initialize(&bridge_admin, &validators, &1u32);
@@ -421,7 +507,7 @@ fn test_mint_duplicate_transfer_panics() {
 
     let signature = ValidatorSignature {
         validator,
-        signature: Bytes::from_array(&env, &[0u8; 64]),
+        signature: sign_transfer(&env, &transfer, &signer),
     };
     let signatures = Vec::from_array(&env, [signature]);
 
@@ -443,8 +529,9 @@ fn test_release_tokens() {
 
     // Setup bridge
     let bridge_admin = Address::generate(&env);
-    let validator = Address::generate(&env);
-    let validators = Vec::from_array(&env, [validator.clone()]);
+    let (signer, validator) = validator_keypair(&env, 1);
+    let second_validator = validator(&env, 2);
+    let validators = Vec::from_array(&env, [validator.clone(), second_validator]);
     let bridge_id = env.register_contract(None, CrossChainBridgeContract);
     let bridge_client = CrossChainBridgeContractClient::new(&env, &bridge_id);
     bridge_client.initialize(&bridge_admin, &validators, &1u32);
@@ -477,7 +564,7 @@ fn test_release_tokens() {
     // Create signature
     let signature = ValidatorSignature {
         validator,
-        signature: Bytes::from_array(&env, &[0u8; 64]),
+        signature: sign_transfer(&env, &transfer, &signer),
     };
     let signatures = Vec::from_array(&env, [signature]);
 
@@ -498,11 +585,13 @@ fn test_release_insufficient_signatures_panics() {
 
     let token_id = env.register_contract(None, MockTokenContract);
     let bridge_admin = Address::generate(&env);
-    let validator = Address::generate(&env);
+    let (signer, validator) = validator_keypair(&env, 1);
     let validators = Vec::from_array(&env, [validator.clone()]);
     let bridge_id = env.register_contract(None, CrossChainBridgeContract);
     let bridge_client = CrossChainBridgeContractClient::new(&env, &bridge_id);
-    bridge_client.initialize(&bridge_admin, &validators, &2u32);
+    bridge_client.initialize(&bridge_admin, &validators, &1u32);
+    bridge_client.add_validator(&bridge_admin, &validator(&env, 2));
+    bridge_client.set_threshold(&bridge_admin, &2u32);
 
     let transfer = BridgeTransfer {
         source_chain: symbol_short!("ethereum"),
@@ -517,7 +606,7 @@ fn test_release_insufficient_signatures_panics() {
     // Only one signature when threshold is 2
     let signature = ValidatorSignature {
         validator,
-        signature: Bytes::from_array(&env, &[0u8; 64]),
+        signature: sign_transfer(&env, &transfer, &signer),
     };
     let signatures = Vec::from_array(&env, [signature]);
 
@@ -537,7 +626,7 @@ fn test_multiple_locks_and_releases() {
 
     // Setup bridge
     let bridge_admin = Address::generate(&env);
-    let validator = Address::generate(&env);
+    let (signer, validator) = validator_keypair(&env, 1);
     let validators = Vec::from_array(&env, [validator.clone()]);
     let bridge_id = env.register_contract(None, CrossChainBridgeContract);
     let bridge_client = CrossChainBridgeContractClient::new(&env, &bridge_id);
@@ -582,7 +671,7 @@ fn test_multiple_locks_and_releases() {
     };
     let signature = ValidatorSignature {
         validator,
-        signature: Bytes::from_array(&env, &[0u8; 64]),
+        signature: sign_transfer(&env, &transfer, &signer),
     };
     let signatures = Vec::from_array(&env, [signature]);
     bridge_client.release_tokens(&transfer, &signatures);
@@ -602,7 +691,7 @@ fn test_event_emission() {
     token_client.initialize(&token_admin);
 
     let bridge_admin = Address::generate(&env);
-    let validators = Vec::from_array(&env, [Address::generate(&env)]);
+    let validators = Vec::from_array(&env, [validator(&env, 1)]);
     let bridge_id = env.register_contract(None, CrossChainBridgeContract);
     let bridge_client = CrossChainBridgeContractClient::new(&env, &bridge_id);
     bridge_client.initialize(&bridge_admin, &validators, &1u32);

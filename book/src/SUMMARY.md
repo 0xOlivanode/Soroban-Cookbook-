@@ -137,6 +137,8 @@
 # Community
 
 - [Community Guidelines](./community-guidelines.md)
+- [Quality Dashboard](./docs/quality-dashboard.md)
+- [Community Guidelines](./community-guidelines.md)
 - [How to Contribute](./CONTRIBUTING.md)
 - [Code of Conduct](./CODE_OF_CONDUCT.md)
 - [Grants Application Process](./docs/grants-process.md)

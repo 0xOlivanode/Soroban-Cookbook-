@@ -28,15 +28,16 @@ pub struct BridgeTransfer {
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ValidatorSignature {
-    pub validator: Address,
-    pub signature: Bytes,
+    pub validator: BytesN<32>,
+    pub signature: BytesN<64>,
 }
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum DataKey {
     Admin,
-    Validator(Address),
+    Validator(BytesN<32>),
+    ValidatorCount,
     ValidatorThreshold,
     LockedBalance(Address, Address),
     Nonce,
@@ -61,23 +62,36 @@ const CONTRACT_NS: Symbol = symbol_short!("bridge");
 #[contractimpl]
 impl CrossChainBridgeContract {
     /// Initialize the bridge contract with admin and initial validators
-    pub fn initialize(env: Env, admin: Address, validators: Vec<Address>, threshold: u32) {
+    pub fn initialize(env: Env, admin: Address, validators: Vec<BytesN<32>>, threshold: u32) {
         if env.storage().instance().has(&DataKey::Admin) {
             panic!("Contract already initialized");
         }
 
         admin.require_auth();
+        if threshold == 0 || threshold > validators.len() {
+            panic!("Invalid validator threshold");
+        }
+
+        let mut validator_count = 0u32;
+        let mut seen_validators = Vec::new(&env);
+        for validator in validators.iter() {
+            if seen_validators.contains(&validator) {
+                panic!("Validator already exists");
+            }
+            seen_validators.push_back(validator.clone());
+            env.storage()
+                .instance()
+                .set(&DataKey::Validator(validator), &true);
+            validator_count += 1;
+        }
 
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage()
             .instance()
             .set(&DataKey::ValidatorThreshold, &threshold);
-
-        for validator in validators.iter() {
-            env.storage()
-                .instance()
-                .set(&DataKey::Validator(validator.clone()), &true);
-        }
+        env.storage()
+            .instance()
+            .set(&DataKey::ValidatorCount, &validator_count);
     }
 
     /// Lock tokens on source chain to initiate a cross-chain transfer
@@ -289,7 +303,7 @@ impl CrossChainBridgeContract {
     }
 
     /// Add a validator (admin only)
-    pub fn add_validator(env: Env, admin: Address, validator: Address) {
+    pub fn add_validator(env: Env, admin: Address, validator: BytesN<32>) {
         Self::require_admin(&env, &admin);
         admin.require_auth();
 
@@ -304,10 +318,14 @@ impl CrossChainBridgeContract {
         env.storage()
             .instance()
             .set(&DataKey::Validator(validator), &true);
+        let validator_count = Self::validator_count(&env);
+        env.storage()
+            .instance()
+            .set(&DataKey::ValidatorCount, &(validator_count + 1));
     }
 
     /// Remove a validator (admin only)
-    pub fn remove_validator(env: Env, admin: Address, validator: Address) {
+    pub fn remove_validator(env: Env, admin: Address, validator: BytesN<32>) {
         Self::require_admin(&env, &admin);
         admin.require_auth();
 
@@ -325,14 +343,17 @@ impl CrossChainBridgeContract {
             .instance()
             .get(&DataKey::ValidatorThreshold)
             .unwrap_or(1);
-        let current_count = Self::count_validators(&env);
-        if current_count - 1 < threshold {
+        let current_count = Self::validator_count(&env);
+        if current_count <= threshold {
             panic!("Cannot remove: would drop below threshold");
         }
 
         env.storage()
             .instance()
             .remove(&DataKey::Validator(validator));
+        env.storage()
+            .instance()
+            .set(&DataKey::ValidatorCount, &(current_count - 1));
     }
 
     /// Update validator threshold (admin only)
@@ -344,7 +365,7 @@ impl CrossChainBridgeContract {
             panic!("Threshold must be at least 1");
         }
 
-        let current_count = Self::count_validators(&env);
+        let current_count = Self::validator_count(&env);
         if threshold > current_count {
             panic!("Threshold exceeds validator count");
         }
@@ -377,11 +398,16 @@ impl CrossChainBridgeContract {
     }
 
     /// Check if address is a validator
-    pub fn is_validator(env: Env, address: Address) -> bool {
+    pub fn is_validator(env: Env, validator: BytesN<32>) -> bool {
         env.storage()
             .instance()
-            .get(&DataKey::Validator(address))
+            .get(&DataKey::Validator(validator))
             .unwrap_or(false)
+    }
+
+    /// Get the number of registered validators
+    pub fn count_validators(env: Env) -> u32 {
+        Self::validator_count(&env)
     }
 
     /// Get current validator threshold
@@ -416,15 +442,16 @@ impl CrossChainBridgeContract {
         }
     }
 
-    fn count_validators(_env: &Env) -> u32 {
-        // In a real implementation, we'd track validators in a list
-        // For this example, we'll return a default count
-        3
+    fn validator_count(env: &Env) -> u32 {
+        env.storage()
+            .instance()
+            .get(&DataKey::ValidatorCount)
+            .unwrap_or(0)
     }
 
     fn verify_validator_signatures(
         env: &Env,
-        _transfer: &BridgeTransfer,
+        transfer: &BridgeTransfer,
         signatures: &Vec<ValidatorSignature>,
     ) {
         let threshold: u32 = env
@@ -435,6 +462,10 @@ impl CrossChainBridgeContract {
 
         let mut valid_signatures = 0;
         let mut seen_validators = Vec::new(env);
+        let transfer_hash = env
+            .crypto()
+            .sha256(&transfer.clone().to_xdr(env))
+            .to_bytes();
 
         for sig in signatures.iter() {
             // Check if validator is valid
@@ -453,8 +484,11 @@ impl CrossChainBridgeContract {
             }
             seen_validators.push_back(sig.validator.clone());
 
-            // In a real implementation, we'd verify the signature here
-            // For this example, we'll just count valid validators
+            env.crypto().ed25519_verify(
+                &sig.validator,
+                &transfer_hash,
+                &sig.signature,
+            );
             valid_signatures += 1;
         }
 
