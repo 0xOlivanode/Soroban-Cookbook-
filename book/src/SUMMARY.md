@@ -119,6 +119,7 @@
 - [DeFi Best Practices](./docs/defi-best-practices.md)
 - [DeFi Security Checklist](./docs/defi-security-checklist.md)
 - [Security Pitfalls](./docs/security-pitfalls.md)
+- [Storage Pitfalls](./docs/storage-pitfalls.md)
 - [Common Pitfalls](./docs/common-pitfalls.md)
 - [Style Guide](./docs/style-guide.md)
 - [Performance Benchmarks](./docs/benchmarks.md)
