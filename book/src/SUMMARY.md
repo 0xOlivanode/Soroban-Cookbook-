@@ -121,6 +121,7 @@
 - [Security Pitfalls](./docs/security-pitfalls.md)
 - [Storage Pitfalls](./docs/storage-pitfalls.md)
 - [Ecosystem Partnerships](./../docs/ecosystem-partnerships.md)
+- [Featured Projects](./../docs/featured-projects.md)
 - [Common Pitfalls](./docs/common-pitfalls.md)
 - [Style Guide](./docs/style-guide.md)
 - [Performance Benchmarks](./docs/benchmarks.md)
