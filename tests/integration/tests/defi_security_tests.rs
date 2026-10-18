@@ -248,7 +248,7 @@ fn test_collateralized_lending_liquidation_cap_and_adjust() {
     // liquidation_threshold = 75
     // liquidation_incentive = 10 (10%)
     // partial_liquidation_ratio = 50 (50%)
-    client.initialize(&80, &75, &10, &50);
+    client.initialize(&Address::generate(&env), &80, &75, &10, &50);
 
     // Deposit collateral & borrow max
     client.deposit_collateral(&borrower, &1000);

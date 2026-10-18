@@ -223,7 +223,7 @@ fn benchmark_liquidation_operations() {
 
             let contract_id = env.register_contract(None, LendingContract);
             let client = LendingContractClient::new(&env, &contract_id);
-            client.initialize(&80, &75, &10, &50);
+            client.initialize(&Address::generate(&env), &80, &75, &10, &50);
 
             // Unhealthy position (LTV 80% > liquidation threshold 75%).
             client.deposit_collateral(&borrower, &1000);
@@ -358,7 +358,7 @@ fn benchmark_report_and_analysis() {
 
             let contract_id = env.register_contract(None, LendingContract);
             let client = LendingContractClient::new(&env, &contract_id);
-            client.initialize(&80, &75, &10, &50);
+            client.initialize(&Address::generate(&env), &80, &75, &10, &50);
             client.deposit_collateral(&borrower, &1000);
             client.borrow(&borrower, &800);
 

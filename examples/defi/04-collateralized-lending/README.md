@@ -18,7 +18,7 @@ A Soroban smart contract implementing collateralized lending with comprehensive 
 ### Initialize
 
 ```rust
-client.initialize(&ltv_ratio, &liquidation_threshold, &liquidation_incentive, &partial_liquidation_ratio);
+client.initialize(&admin, &ltv_ratio, &liquidation_threshold, &liquidation_incentive, &partial_liquidation_ratio);
 ```
 
 ### Deposit Collateral

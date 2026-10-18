@@ -176,3 +176,13 @@ fn test_mint_emits_event_with_strategy_topic() {
     assert_eq!(payload.amount, 50);
     assert_eq!(payload.strategy, symbol_short!("fixed"));
 }
+
+#[test]
+fn test_initialize_requires_admin_auth() {
+    let env = Env::default();
+    let admin = Address::generate(&env);
+    let contract_id = env.register_contract(None, MintingStrategiesToken);
+    let client = MintingStrategiesTokenClient::new(&env, &contract_id);
+
+    assert!(client.try_initialize(&admin, &1000, &0, &10, &100).is_err());
+}

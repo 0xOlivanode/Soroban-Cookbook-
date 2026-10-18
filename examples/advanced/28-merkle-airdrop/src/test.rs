@@ -292,3 +292,14 @@ fn test_invalid_amount_fails() {
     let result_negative = f.client.try_claim(&claimer, &-100i128, &proof);
     assert_eq!(result_negative, Err(Ok(Error::InvalidAmount)));
 }
+
+#[test]
+fn test_initialize_requires_admin_auth() {
+    let env = Env::default();
+    let admin = Address::generate(&env);
+    let token = Address::generate(&env);
+    let client = MerkleAirdropContractClient::new(&env, &env.register(MerkleAirdropContract, ()));
+    let root = BytesN::from_array(&env, &[0u8; 32]);
+
+    assert!(client.try_initialize(&admin, &token, &root).is_err());
+}

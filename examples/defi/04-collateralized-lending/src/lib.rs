@@ -17,6 +17,7 @@ pub struct LendingContract;
 impl LendingContract {
     pub fn initialize(
         env: Env,
+        admin: Address,
         ltv_ratio: i128,
         liquidation_threshold: i128,
         liquidation_incentive: i128,
@@ -29,6 +30,9 @@ impl LendingContract {
         {
             panic!("already initialized");
         }
+        env.storage()
+            .instance()
+            .set(&Symbol::new(&env, "admin"), &admin);
         env.storage()
             .instance()
             .set(&Symbol::new(&env, "ltv_ratio"), &ltv_ratio);
@@ -54,6 +58,14 @@ impl LendingContract {
     }
 
     pub fn set_emergency_pause(env: Env, admin: Address, paused: bool) {
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&Symbol::new(&env, "admin"))
+            .unwrap();
+        if admin != stored_admin {
+            panic!("not admin");
+        }
         admin.require_auth();
         env.storage()
             .instance()
