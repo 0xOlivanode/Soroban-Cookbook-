@@ -186,7 +186,7 @@ fn setup_lending_contract() -> (LendingContractClient<'static>, Address, Address
     let admin = Address::generate(&env);
     let contract_id = env.register_contract(None, LendingContract);
     let client = LendingContractClient::new(&env, &contract_id);
-    client.initialize(&80, &75, &10, &50);
+    client.initialize(&admin, &80, &75, &10, &50);
     (client, borrower, liquidator, admin)
 }
 

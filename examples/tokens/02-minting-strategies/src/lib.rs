@@ -68,6 +68,7 @@ impl MintingStrategiesToken {
             return Err(MintingError::InvalidSchedule);
         }
 
+        admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::TotalSupply, &0i128);
         env.storage()

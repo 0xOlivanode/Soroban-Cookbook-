@@ -82,6 +82,7 @@ impl MerkleAirdropContract {
             return Err(Error::AlreadyInitialized);
         }
 
+        admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::Token, &token);
         env.storage().instance().set(&DataKey::Root, &root);

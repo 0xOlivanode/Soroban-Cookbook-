@@ -9,7 +9,7 @@ fn test_initialize() {
     let contract_id = env.register(LendingContract, ());
     let client = LendingContractClient::new(&env, &contract_id);
 
-    client.initialize(&80, &85, &10, &50);
+    client.initialize(&Address::generate(&env), &80, &85, &10, &50);
 }
 
 #[test]
@@ -20,8 +20,8 @@ fn test_initialize_twice() {
     let contract_id = env.register(LendingContract, ());
     let client = LendingContractClient::new(&env, &contract_id);
 
-    client.initialize(&80, &85, &10, &50);
-    client.initialize(&80, &85, &10, &50);
+    client.initialize(&Address::generate(&env), &80, &85, &10, &50);
+    client.initialize(&Address::generate(&env), &80, &85, &10, &50);
 }
 
 #[test]
@@ -32,7 +32,7 @@ fn test_deposit_collateral() {
     let client = LendingContractClient::new(&env, &contract_id);
     let user = Address::generate(&env);
 
-    client.initialize(&80, &85, &10, &50);
+    client.initialize(&Address::generate(&env), &80, &85, &10, &50);
     client.deposit_collateral(&user, &1000);
 
     let position = client.get_position(&user);
@@ -49,7 +49,7 @@ fn test_deposit_zero() {
     let client = LendingContractClient::new(&env, &contract_id);
     let user = Address::generate(&env);
 
-    client.initialize(&80, &85, &10, &50);
+    client.initialize(&Address::generate(&env), &80, &85, &10, &50);
     client.deposit_collateral(&user, &0);
 }
 
@@ -62,7 +62,7 @@ fn test_deposit_negative() {
     let client = LendingContractClient::new(&env, &contract_id);
     let user = Address::generate(&env);
 
-    client.initialize(&80, &85, &10, &50);
+    client.initialize(&Address::generate(&env), &80, &85, &10, &50);
     client.deposit_collateral(&user, &-100);
 }
 
@@ -74,7 +74,7 @@ fn test_withdraw_collateral() {
     let client = LendingContractClient::new(&env, &contract_id);
     let user = Address::generate(&env);
 
-    client.initialize(&80, &85, &10, &50);
+    client.initialize(&Address::generate(&env), &80, &85, &10, &50);
     client.deposit_collateral(&user, &1000);
     client.withdraw_collateral(&user, &500);
 
@@ -91,7 +91,7 @@ fn test_withdraw_too_much() {
     let client = LendingContractClient::new(&env, &contract_id);
     let user = Address::generate(&env);
 
-    client.initialize(&80, &85, &10, &50);
+    client.initialize(&Address::generate(&env), &80, &85, &10, &50);
     client.deposit_collateral(&user, &1000);
     client.withdraw_collateral(&user, &2000);
 }
@@ -104,7 +104,7 @@ fn test_borrow() {
     let client = LendingContractClient::new(&env, &contract_id);
     let user = Address::generate(&env);
 
-    client.initialize(&80, &85, &10, &50);
+    client.initialize(&Address::generate(&env), &80, &85, &10, &50);
     client.deposit_collateral(&user, &1000);
     client.borrow(&user, &500);
 
@@ -121,7 +121,7 @@ fn test_borrow_too_much() {
     let client = LendingContractClient::new(&env, &contract_id);
     let user = Address::generate(&env);
 
-    client.initialize(&80, &85, &10, &50);
+    client.initialize(&Address::generate(&env), &80, &85, &10, &50);
     client.deposit_collateral(&user, &1000);
     client.borrow(&user, &900);
 }
@@ -134,7 +134,7 @@ fn test_repay() {
     let client = LendingContractClient::new(&env, &contract_id);
     let user = Address::generate(&env);
 
-    client.initialize(&80, &85, &10, &50);
+    client.initialize(&Address::generate(&env), &80, &85, &10, &50);
     client.deposit_collateral(&user, &1000);
     client.borrow(&user, &500);
     client.repay(&user, &300);
@@ -151,7 +151,7 @@ fn test_repay_full() {
     let client = LendingContractClient::new(&env, &contract_id);
     let user = Address::generate(&env);
 
-    client.initialize(&80, &85, &10, &50);
+    client.initialize(&Address::generate(&env), &80, &85, &10, &50);
     client.deposit_collateral(&user, &1000);
     client.borrow(&user, &500);
     client.repay(&user, &600);
@@ -169,7 +169,7 @@ fn test_partial_liquidation() {
     let borrower = Address::generate(&env);
     let liquidator = Address::generate(&env);
 
-    client.initialize(&80, &75, &10, &50);
+    client.initialize(&Address::generate(&env), &80, &75, &10, &50);
     client.deposit_collateral(&borrower, &1000);
     client.borrow(&borrower, &800);
 
@@ -192,7 +192,7 @@ fn test_liquidation_incentive() {
     let borrower = Address::generate(&env);
     let liquidator = Address::generate(&env);
 
-    client.initialize(&80, &75, &10, &50);
+    client.initialize(&Address::generate(&env), &80, &75, &10, &50);
     client.deposit_collateral(&borrower, &1000);
     client.borrow(&borrower, &800);
 
@@ -212,7 +212,7 @@ fn test_liquidate_healthy() {
     let borrower = Address::generate(&env);
     let liquidator = Address::generate(&env);
 
-    client.initialize(&80, &85, &10, &50);
+    client.initialize(&Address::generate(&env), &80, &85, &10, &50);
     client.deposit_collateral(&borrower, &2000);
     client.borrow(&borrower, &800);
 
@@ -227,7 +227,7 @@ fn test_health_factor_max() {
     let client = LendingContractClient::new(&env, &contract_id);
     let user = Address::generate(&env);
 
-    client.initialize(&80, &85, &10, &50);
+    client.initialize(&Address::generate(&env), &80, &85, &10, &50);
     let health_factor = client.get_health_factor(&user);
     assert_eq!(health_factor, i128::MAX);
 }
@@ -240,7 +240,7 @@ fn test_health_factor_calculation() {
     let client = LendingContractClient::new(&env, &contract_id);
     let user = Address::generate(&env);
 
-    client.initialize(&80, &85, &10, &50);
+    client.initialize(&Address::generate(&env), &80, &85, &10, &50);
     client.deposit_collateral(&user, &1000);
     client.borrow(&user, &500);
 
@@ -257,7 +257,7 @@ fn test_multiple_users() {
     let user1 = Address::generate(&env);
     let user2 = Address::generate(&env);
 
-    client.initialize(&80, &85, &10, &50);
+    client.initialize(&Address::generate(&env), &80, &85, &10, &50);
     client.deposit_collateral(&user1, &1000);
     client.deposit_collateral(&user2, &2000);
 
@@ -276,7 +276,7 @@ fn test_withdraw_after_repay() {
     let client = LendingContractClient::new(&env, &contract_id);
     let user = Address::generate(&env);
 
-    client.initialize(&80, &85, &10, &50);
+    client.initialize(&Address::generate(&env), &80, &85, &10, &50);
     client.deposit_collateral(&user, &1000);
     client.borrow(&user, &500);
     client.repay(&user, &500);
@@ -296,7 +296,7 @@ fn test_emergency_pause() {
     let admin = Address::generate(&env);
     let user = Address::generate(&env);
 
-    client.initialize(&80, &85, &10, &50);
+    client.initialize(&admin, &80, &85, &10, &50);
     client.set_emergency_pause(&admin, &true);
 
     let _ = client.try_deposit_collateral(&user, &1000).unwrap_err();
@@ -311,7 +311,7 @@ fn test_emergency_liquidate() {
     let admin = Address::generate(&env);
     let borrower = Address::generate(&env);
 
-    client.initialize(&80, &85, &10, &50);
+    client.initialize(&admin, &80, &85, &10, &50);
     client.deposit_collateral(&borrower, &1000);
     client.borrow(&borrower, &800);
     client.set_emergency_pause(&admin, &true);
@@ -332,8 +332,22 @@ fn test_emergency_liquidate_not_paused() {
     let admin = Address::generate(&env);
     let borrower = Address::generate(&env);
 
-    client.initialize(&80, &85, &10, &50);
+    client.initialize(&admin, &80, &85, &10, &50);
     client.deposit_collateral(&borrower, &1000);
     client.borrow(&borrower, &800);
     client.emergency_liquidate(&admin, &borrower);
+}
+
+#[test]
+#[should_panic(expected = "not admin")]
+fn test_non_admin_cannot_pause() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(LendingContract, ());
+    let client = LendingContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    let attacker = Address::generate(&env);
+
+    client.initialize(&admin, &80, &85, &10, &50);
+    client.set_emergency_pause(&attacker, &true);
 }
