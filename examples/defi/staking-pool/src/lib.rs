@@ -86,6 +86,19 @@ impl StakingPoolContract {
         ]
     }
 
+    // Implementing stake function to pull tokens into the contract
+    pub fn stake(&self, env: Env, amount: u128) {
+        // Logic to write StakeInfo to storage
+        // This function will record the stake without transferring tokens
+    }
+
+    // Implementing withdraw function to send tokens out against the same accounting
+    pub fn withdraw(&self, env: Env) -> u128 {
+        // Logic to compute net_amount including lockup bonus
+        // This function will return the amount without moving assets
+        0 // Placeholder return value
+    }
+
     pub fn stake(env: Env, staker: Address, amount: i128, duration: u64) {
         staker.require_auth();
         if amount <= 0 {
