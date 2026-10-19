@@ -1,7 +1,7 @@
 #![cfg_attr(target_family = "wasm", no_std)]
 #![allow(deprecated)]
 
-use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env, Symbol, Vec};
+use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, token, Address, Env, Symbol, Vec};
 
 const LOCKUP_30_DAYS: u64 = 2_592_000;
 const LOCKUP_90_DAYS: u64 = 7_776_000;
@@ -15,6 +15,7 @@ const BASIS_POINTS_DENOMINATOR: i128 = 10_000;
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum DataKey {
+    Token,
     Stake(Address),
 }
 
@@ -65,6 +66,20 @@ pub struct StakingPoolContract;
 
 #[contractimpl]
 impl StakingPoolContract {
+    pub fn initialize(env: Env, token_addr: Address) {
+        if env.storage().instance().has(&DataKey::Token) {
+            panic!("already initialized");
+        }
+        env.storage().instance().set(&DataKey::Token, &token_addr);
+    }
+
+    fn staking_token(env: &Env) -> Address {
+        env.storage()
+            .instance()
+            .get(&DataKey::Token)
+            .expect("staking token not initialized")
+    }
+
     pub fn get_lockup_options(env: Env) -> Vec<LockupOption> {
         soroban_sdk::vec![
             &env,
@@ -86,19 +101,6 @@ impl StakingPoolContract {
         ]
     }
 
-    // Implementing stake function to pull tokens into the contract
-    pub fn stake(&self, env: Env, amount: u128) {
-        // Logic to write StakeInfo to storage
-        // This function will record the stake without transferring tokens
-    }
-
-    // Implementing withdraw function to send tokens out against the same accounting
-    pub fn withdraw(&self, env: Env) -> u128 {
-        // Logic to compute net_amount including lockup bonus
-        // This function will return the amount without moving assets
-        0 // Placeholder return value
-    }
-
     pub fn stake(env: Env, staker: Address, amount: i128, duration: u64) {
         staker.require_auth();
         if amount <= 0 {
@@ -109,6 +111,10 @@ impl StakingPoolContract {
         if env.storage().persistent().has(&key) {
             panic!("Active stake exists");
         }
+
+        let staking_token = Self::staking_token(&env);
+        let contract = env.current_contract_address();
+        token::Client::new(&env, &staking_token).transfer(&staker, &contract, &amount);
 
         let boost_bps = Self::lockup_boost(duration);
         let start_ts = env.ledger().timestamp();
@@ -155,6 +161,9 @@ impl StakingPoolContract {
             let bonus = stake.amount * stake.boost_bps / BASIS_POINTS_DENOMINATOR;
             (stake.amount + bonus, 0, true)
         };
+
+        let contract = env.current_contract_address();
+        token::Client::new(&env, &Self::staking_token(&env)).transfer(&contract, &staker, &net_amount);
 
         env.events().publish(
             (CONTRACT_NS, ACTION_WITHDRAW, staker.clone()),
